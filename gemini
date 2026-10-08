@@ -1,0 +1,54 @@
+import anthropic
+import google.generativeai as genai
+from PIL import Image
+import io
+
+CLAUDE_KEY = "sk-ant-..."
+GEMINI_KEY = "AIza..."
+
+claude = anthropic.Anthropic(api_key=CLAUDE_KEY)
+genai.configure(api_key=GEMINI_KEY)
+
+# Le decimos a Claude que tiene una herramienta para crear imágenes
+def crear_imagen_con_gemini(prompt_visual):
+    print(f"🎨 Claude pidió crear: {prompt_visual}")
+    model = genai.GenerativeModel("gemini-2.0-flash-exp-image-generation")
+    response = model.generate_content(prompt_visual)
+    # Guarda la imagen
+    image_data = response.candidates[0].content.parts[0].inline_data.data
+    img = Image.open(io.BytesIO(image_data))
+    img.save("imagen_generada.png")
+    return "imagen_generada.png creada con éxito"
+
+# Herramienta que Claude puede usar
+tools = [
+    {
+        "name": "crear_imagen",
+        "description": "Crea una imagen a partir de una descripción detallada. Úsala cuando el usuario pida dibujar, diseñar, visualizar algo.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt_visual": {"type": "string", "description": "Prompt detallado en inglés para generar la imagen, muy descriptivo, con estilo, iluminación, etc."}
+            },
+            "required": ["prompt_visual"]
+        }
+    }
+]
+
+# Conversación
+mensaje_usuario = "Créame una imagen de un kiosko hexagonal con techo de teja española color terracota en Bogotá"
+
+response = claude.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    tools=tools,
+    messages=[{"role": "user", "content": mensaje_usuario}]
+)
+
+# Si Claude quiere usar la herramienta de imagen
+if response.stop_reason == "tool_use":
+    for block in response.content:
+        if block.type == "tool_use":
+            prompt_que_invento_claude = block.input["prompt_visual"]
+            resultado = crear_imagen_con_gemini(prompt_que_invento_claude)
+            print(resultado)
